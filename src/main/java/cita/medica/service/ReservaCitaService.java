@@ -2,79 +2,75 @@ package cita.medica.service;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import org.springframework.stereotype.Service;
 
+import cita.medica.Entity.CitaEntity;
+import cita.medica.Repository.CitaRepository;
 import cita.medica.dto.CrearCitaDTO;
 import cita.medica.dto.ReservaCitaDTO;
 
 @Service
-
 public class ReservaCitaService {
 
-    /**Horarios medico*/
     private static final List<LocalTime> BLOQUES_HORARIOS = List.of(
-            LocalTime.of(9, 0), LocalTime.of(9, 30), LocalTime.of(10, 0), LocalTime.of(10, 30),
-            LocalTime.of(11, 0), LocalTime.of(11, 30), LocalTime.of(12, 0), LocalTime.of(12, 30),
-            LocalTime.of(13, 0), LocalTime.of(13, 30), LocalTime.of(14, 0), LocalTime.of(14, 30),
-            LocalTime.of(15, 0), LocalTime.of(15, 30), LocalTime.of(16, 0), LocalTime.of(16, 30),
-            LocalTime.of(17, 0));
-     
-    private final List<ReservaCitaDTO> reservas = new ArrayList<ReservaCitaDTO>();
+            LocalTime.of(8, 0),
+            LocalTime.of(8, 30),
+            LocalTime.of(9, 0),
+            LocalTime.of(9, 30),
+            LocalTime.of(10, 0),
+            LocalTime.of(10, 30),
+            LocalTime.of(11, 0),
+            LocalTime.of(11, 30),
+            LocalTime.of(12, 0),
+            LocalTime.of(12, 30),
+            LocalTime.of(14, 0),
+            LocalTime.of(14, 30),
+            LocalTime.of(15, 0),
+            LocalTime.of(15, 30),
+            LocalTime.of(16, 0),
+            LocalTime.of(16, 30),
+            LocalTime.of(17, 0),
+            LocalTime.of(17, 30));
 
-    /**Datos iniciales */
-    public ReservaCitaService(){
+    private final CitaRepository repository;
 
-        reservas.add(ReservaCitaDTO.builder().id(1L).nombreMedico("Javier Garcia").fecha(LocalDate.of(2026, 3, 25)).hora(LocalTime.of(10, 0)).especialidad("Oftalmologia").estado("Reservada").build());
-
-        reservas.add(ReservaCitaDTO.builder().id(2L).nombreMedico("Nicolas Arrue").fecha(LocalDate.of(2026, 3, 25)).hora(LocalTime.of(15, 30)).especialidad("Medicina General").estado("Reservada").build());
-
-        reservas.add(ReservaCitaDTO.builder().id(3L).nombreMedico("Martin Jhon").fecha(LocalDate.of(2026, 3, 2)).hora(LocalTime.of(13, 30)).especialidad("Toma de Muestras").estado("Reservada").build());
-
+    public ReservaCitaService(CitaRepository repository) {
+        this.repository = repository;
     }
 
-    /**Muestra las ordenes*/
     public List<ReservaCitaDTO> obtenerTodas() {
-
-        return reservas;
+        return repository.findAllByOrderByIdAsc().stream()
+                .map(this::toDto)
+                .toList();
     }
 
-    /**Buscar por id*/
     public ReservaCitaDTO obtenerPorId(Long id) {
-
-        for (ReservaCitaDTO reserva : reservas) {
-
-            if (reserva.getId().equals(id)){
-
-                return reserva;
-            }
-        }
-        return null;
+        return repository.findById(id)
+                .map(this::toDto)
+                .orElse(null);
     }
 
-    /**Crear reserva luego de validar hora */
     public ReservaCitaDTO crear(CrearCitaDTO request) {
         validarHorarioPermitido(request.getHora());
         validarConflicto(null, request);
 
-        ReservaCitaDTO nuevaReserva = ReservaCitaDTO.builder().id(siguienteId())
-                .nombreMedico(request.getNombreMedico()).fecha(request.getFecha()).hora(request.getHora())
-                .especialidad(request.getEspecialidad()).estado("Reservada").build();
+        CitaEntity nuevaReserva = CitaEntity.builder()
+                .nombreMedico(request.getNombreMedico())
+                .fecha(request.getFecha())
+                .hora(request.getHora())
+                .especialidad(request.getEspecialidad())
+                .estado("Reservada")
+                .build();
 
-        reservas.add(nuevaReserva);
-        return nuevaReserva;
+        return toDto(repository.save(nuevaReserva));
     }
 
-    /**Actualizacion */
     public ReservaCitaDTO actualizar(Long id, CrearCitaDTO request) {
-
-        ReservaCitaDTO reserva = obtenerPorId(id);
+        CitaEntity reserva = repository.findById(id).orElse(null);
 
         if (reserva == null) {
             return null;
@@ -88,42 +84,33 @@ public class ReservaCitaService {
         reserva.setHora(request.getHora());
         reserva.setEspecialidad(request.getEspecialidad());
 
-        return reserva;
+        return toDto(repository.save(reserva));
     }
 
-    //**Cambio de estado de reserva */
     public ReservaCitaDTO cancelar(Long id) {
+        CitaEntity reserva = repository.findById(id).orElse(null);
 
-        for (ReservaCitaDTO reserva : reservas) {
-
-            if (reserva.getId().equals(id)) {
-
-                reserva.setEstado("Anulada");
-                return reserva;
-            }
-        }
-        return null;
-    }
-
-    /**id autoincremental */
-    private Long siguienteId() {
-
-        long maxId = 0L;
-
-        for (ReservaCitaDTO reserva : reservas) {
-            if (reserva.getId() != null && reserva.getId() > maxId) {
-                maxId = reserva.getId();
-            }
+        if (reserva == null) {
+            return null;
         }
 
-        return maxId + 1;
+        reserva.setEstado("Anulada");
+        return toDto(repository.save(reserva));
     }
 
-    /**Evita tomar nuevamente la misma hora */
+    public boolean eliminar(Long id) {
+        if (!repository.existsById(id)) {
+            return false;
+        }
+
+        repository.deleteById(id);
+        return true;
+    }
+
     private void validarConflicto(Long reservaIdIgnorada, CrearCitaDTO request) {
+        List<CitaEntity> reservas = repository.findAllByOrderByIdAsc();
 
-        for (ReservaCitaDTO reserva : reservas) {
-
+        for (CitaEntity reserva : reservas) {
             boolean mismaReserva = reservaIdIgnorada != null && reserva.getId().equals(reservaIdIgnorada);
             boolean mismaFecha = reserva.getFecha().equals(request.getFecha());
             boolean mismaHora = reserva.getHora().equals(request.getHora());
@@ -136,37 +123,22 @@ public class ReservaCitaService {
         }
     }
 
-    /**Validador de hora */
     private void validarHorarioPermitido(LocalTime hora) {
-
         if (!BLOQUES_HORARIOS.contains(hora)) {
             throw new IllegalArgumentException("La hora debe coincidir con uno de los bloques disponibles del sistema");
         }
     }
 
-    /**Valida horas medicas quitando las tomadas */
     public Map<String, Object> consultarDisponibilidad(LocalDate fecha, String nombreMedico, String especialidad) {
+        List<LocalTime> horariosOcupados = repository
+                .findByFechaAndNombreMedicoAndEspecialidadAndEstadoNot(fecha, nombreMedico, especialidad, "Anulada")
+                .stream()
+                .map(CitaEntity::getHora)
+                .toList();
 
-        Set<LocalTime> horariosOcupados = new HashSet<>();
-        List<LocalTime> horariosDisponibles = new ArrayList<>();
-
-        for (ReservaCitaDTO reserva : reservas) {
-
-            boolean mismaFecha = reserva.getFecha().equals(fecha);
-            boolean mismoMedico = reserva.getNombreMedico().equals(nombreMedico);
-            boolean mismaEspecialidad = reserva.getEspecialidad().equals(especialidad);
-            boolean reservaActiva = !"Anulada".equals(reserva.getEstado());
-
-            if (mismaFecha && mismoMedico && mismaEspecialidad && reservaActiva){
-                horariosOcupados.add(reserva.getHora());
-            }
-        }
-
-        for (LocalTime bloque : BLOQUES_HORARIOS) {
-            if (!horariosOcupados.contains(bloque)) {
-                horariosDisponibles.add(bloque);
-            }
-        }
+        List<LocalTime> horariosDisponibles = BLOQUES_HORARIOS.stream()
+                .filter(bloque -> !horariosOcupados.contains(bloque))
+                .toList();
 
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("fecha", fecha);
@@ -175,5 +147,16 @@ public class ReservaCitaService {
         response.put("horariosDisponibles", horariosDisponibles);
 
         return response;
+    }
+
+    private ReservaCitaDTO toDto(CitaEntity entity) {
+        return ReservaCitaDTO.builder()
+                .id(entity.getId())
+                .nombreMedico(entity.getNombreMedico())
+                .fecha(entity.getFecha())
+                .hora(entity.getHora())
+                .especialidad(entity.getEspecialidad())
+                .estado(entity.getEstado())
+                .build();
     }
 }
