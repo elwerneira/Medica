@@ -8,10 +8,10 @@ import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
-import cita.medica.Entity.CitaEntity;
-import cita.medica.Repository.CitaRepository;
 import cita.medica.dto.CrearCitaDTO;
 import cita.medica.dto.ReservaCitaDTO;
+import cita.medica.entity.CitaEntity;
+import cita.medica.repository.CitaRepository;
 
 @Service
 public class ReservaCitaService {

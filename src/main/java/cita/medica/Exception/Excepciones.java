@@ -1,4 +1,4 @@
-package cita.medica.Exception;
+package cita.medica.exception;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;

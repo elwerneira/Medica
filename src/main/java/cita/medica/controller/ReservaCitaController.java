@@ -4,6 +4,8 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.hateoas.CollectionModel;
+import org.springframework.hateoas.EntityModel;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +26,9 @@ import cita.medica.service.ReservaCitaService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.linkTo;
+import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.methodOn;
+
 @RestController
 @Validated
 @RequestMapping("/reservas")
@@ -36,8 +41,18 @@ public class ReservaCitaController {
     }
 
     @GetMapping
-    public ResponseEntity<List<ReservaCitaDTO>> obtenerTodas() {
-        return ResponseEntity.ok(service.obtenerTodas());
+    public ResponseEntity<CollectionModel<EntityModel<ReservaCitaDTO>>> obtenerTodas() {
+        List<EntityModel<ReservaCitaDTO>> reservas = service.obtenerTodas().stream()
+                .map(this::toModel)
+                .toList();
+
+        CollectionModel<EntityModel<ReservaCitaDTO>> response = CollectionModel.of(
+                reservas,
+                linkTo(methodOn(ReservaCitaController.class).obtenerTodas()).withSelfRel(),
+                linkTo(methodOn(ReservaCitaController.class).consultaDisponibilidad(null, null, null))
+                        .withRel("disponibilidad"));
+
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{id}")
@@ -48,13 +63,13 @@ public class ReservaCitaController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Cita Medica no encontrada: " + id);
         }
 
-        return ResponseEntity.ok(reserva);
+        return ResponseEntity.ok(toModel(reserva));
     }
 
     @PostMapping
-    public ResponseEntity<ReservaCitaDTO> crear(@Valid @RequestBody CrearCitaDTO request) {
+    public ResponseEntity<EntityModel<ReservaCitaDTO>> crear(@Valid @RequestBody CrearCitaDTO request) {
         ReservaCitaDTO creada = service.crear(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(creada);
+        return ResponseEntity.status(HttpStatus.CREATED).body(toModel(creada));
     }
 
     @PutMapping("/{id}")
@@ -65,7 +80,7 @@ public class ReservaCitaController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Cita Medica no encontrada, ID: " + id);
         }
 
-        return ResponseEntity.ok(actualizada);
+        return ResponseEntity.ok(toModel(actualizada));
     }
 
     @PutMapping("/{id}/cancelar")
@@ -76,16 +91,23 @@ public class ReservaCitaController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body("Cita Medica no encontrada, ID: " + id);
         }
 
-        return ResponseEntity.ok(cancelada);
+        return ResponseEntity.ok(toModel(cancelada));
     }
 
     @GetMapping("/disponibilidad")
-    public ResponseEntity<Map<String, Object>> consultaDisponibilidad(
+    public ResponseEntity<EntityModel<Map<String, Object>>> consultaDisponibilidad(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fecha,
             @RequestParam @NotBlank(message = "El nombre del medico es obligatorio") String nombreMedico,
             @RequestParam @NotBlank(message = "La especialidad es obligatoria") String especialidad) {
 
-        return ResponseEntity.ok(service.consultarDisponibilidad(fecha, nombreMedico, especialidad));
+        Map<String, Object> disponibilidad = service.consultarDisponibilidad(fecha, nombreMedico, especialidad);
+        EntityModel<Map<String, Object>> response = EntityModel.of(
+                disponibilidad,
+                linkTo(methodOn(ReservaCitaController.class)
+                        .consultaDisponibilidad(fecha, nombreMedico, especialidad)).withSelfRel(),
+                linkTo(methodOn(ReservaCitaController.class).obtenerTodas()).withRel("reservas"));
+
+        return ResponseEntity.ok(response);
     }
 
     @DeleteMapping("/{id}")
@@ -97,5 +119,15 @@ public class ReservaCitaController {
         }
 
         return ResponseEntity.noContent().build();
+    }
+
+    private EntityModel<ReservaCitaDTO> toModel(ReservaCitaDTO reserva) {
+        return EntityModel.of(
+                reserva,
+                linkTo(methodOn(ReservaCitaController.class).obtenerPorId(reserva.getId())).withSelfRel(),
+                linkTo(methodOn(ReservaCitaController.class).obtenerTodas()).withRel("reservas"),
+                linkTo(methodOn(ReservaCitaController.class).actualizar(reserva.getId(), null)).withRel("actualizar"),
+                linkTo(methodOn(ReservaCitaController.class).cancelar(reserva.getId())).withRel("cancelar"),
+                linkTo(methodOn(ReservaCitaController.class).eliminar(reserva.getId())).withRel("eliminar"));
     }
 }

@@ -1,4 +1,4 @@
-package cita.medica.Entity;
+package cita.medica.entity;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
