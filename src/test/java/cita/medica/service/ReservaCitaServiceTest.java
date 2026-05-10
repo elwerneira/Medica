@@ -1,8 +1,11 @@
 package cita.medica.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
@@ -98,5 +101,27 @@ class ReservaCitaServiceTest {
         assertEquals("Anulada", resultado.getEstado());
         verify(repository).findById(1L);
         verify(repository).save(reserva);
+    }
+
+    @Test
+    void crearDebeRechazarHorarioNoPermitido() {
+        request.setHora(LocalTime.of(13, 0));
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.crear(request));
+
+        assertEquals("La hora debe coincidir con uno de los bloques disponibles del sistema", exception.getMessage());
+    }
+
+    @Test
+    void eliminarDebeRetornarFalseCuandoReservaNoExiste() {
+        when(repository.existsById(99L)).thenReturn(false);
+
+        boolean resultado = service.eliminar(99L);
+
+        assertFalse(resultado);
+        verify(repository).existsById(99L);
+        verify(repository, never()).deleteById(99L);
     }
 }
